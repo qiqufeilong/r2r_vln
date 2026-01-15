@@ -1,0 +1,94 @@
+# @package _global_
+defaults:
+  - /benchmark/nav: vln_r2r
+  - /habitat_baselines: habitat_baselines_rl_config_base
+  - _self_
+
+habitat_baselines:
+  num_updates: -1
+  verbose: False
+  trainer_name: "ppo"
+  torch_gpu_id: 0
+  tensorboard_dir: "tb/vln_r2r"
+  checkpoint_folder: "data/vln_r2r_checkpoints"
+  num_environments: 1
+  total_num_steps: 30e6
+  log_interval: 25
+  num_checkpoints: 100
+  force_torch_single_threaded: True
+
+  eval:
+    video_option: []
+  test_episode_count: -1
+  eval_ckpt_path_dir: "data/vln_r2r_checkpoints"
+
+  rl:
+    # 清空policy块，避免所有PolicyConfig类型校验错误
+    policy: {}
+
+    ppo:
+      clip_param: 0.2
+      ppo_epoch: 4
+      num_mini_batch: 1
+      value_loss_coef: 0.5
+      entropy_coef: 0.001
+      lr: 2.5e-4
+      eps: 1e-5
+      max_grad_norm: 0.5
+      num_steps: 128
+      hidden_size: 512
+      use_gae: True
+      gamma: 0.99
+      tau: 0.95
+      use_linear_clip_decay: True
+      use_linear_lr_decay: True
+      reward_window_size: 50
+      use_double_buffered_sampler: False
+
+habitat:
+  dataset:
+    type: R2RVLN-v1
+    split: train
+    data_path: "data/datasets/vln/mp3d/r2r/v1/{split}/{split}.json.gz"
+    scenes_dir: "data/scene_datasets/"
+
+  environment:
+    max_episode_steps: 500
+  
+  simulator:
+    forward_step_size: 0.25
+    turn_angle: 15
+    agents:
+      main_agent:
+        # 彻底移除observation_spaces（当前版本不支持）
+        # Habitat会自动根据sim_sensors生成观测空间shape
+        sim_sensors:
+          rgb_sensor:
+            width: 256
+            height: 256
+            hfov: 90
+            type: HabitatSimRGBSensor
+          depth_sensor:
+            width: 256
+            height: 256
+            hfov: 90
+            type: HabitatSimDepthSensor
+          gps_sensor:
+            type: GPSSensor
+          compass_sensor:
+            type: CompassSensor
+    habitat_sim_v0:
+      gpu_device_id: 0
+
+  task:
+    type: VLN-v0
+    reward_measure: "distance_to_goal_reward"
+    success_measure: "spl"
+    end_on_success: True
+    # 移除task下的observation_spaces（当前版本不支持）
+    sensors:
+      instruction_sensor:
+        type: InstructionSensor
+        instruction_sensor_uuid: instruction
+        max_text_len: 200
+        embedding_size: 512
