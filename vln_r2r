@@ -4,28 +4,69 @@ defaults:
   - /habitat_baselines: habitat_baselines_rl_config_base
   - _self_
 
+# -------------------------- Habitat 核心配置 --------------------------
+habitat:
+  seed: 100
+  env_task: "GymHabitatEnv"
+  task:
+    type: "VLN-v0"
+    reward_measure: "distance_to_goal_reward"
+    success_measure: "spl"
+    success_reward: 2.5
+    slack_reward: -0.01
+    end_on_success: True
+    lab_sensors:
+      gps: { type: "GPSSensor" }
+      compass: { type: "CompassSensor" }
+  environment:
+    max_episode_steps: 500
+    iterator_options: { cycle: true, shuffle: True, group_by_scene: false }
+  simulator:
+    forward_step_size: 0.25
+    turn_angle: 10
+    habitat_sim_v0:
+      gpu_device_id: 0
+      enable_physics: False
+    agents:
+      main_agent:
+        height: 1.5
+        radius: 0.1
+        max_climb: 0.2
+        max_slope: 45.0
+        sim_sensors:
+          rgb_sensor: { width: 256, height: 256, hfov: 90, type: "HabitatSimRGBSensor" }
+  dataset:
+    split: train
+    data_path: "/root/habitat-lab/data/datasets/vln/mp3d/r2r/v1/{split}/{split}.json.gz"
+    scenes_dir: "/root/habitat-lab/data/scene_datasets/"
+    content_scenes: ["*"]
+  gym:
+    obs_keys: ["instruction", "rgb", "gps", "compass"]
+
+# -------------------------- Habitat Baselines 配置（删除非法字段） --------------------------
 habitat_baselines:
-  num_updates: -1
   verbose: False
   trainer_name: "ppo"
   torch_gpu_id: 0
   tensorboard_dir: "tb/vln_r2r"
-  checkpoint_folder: "data/vln_r2r_checkpoints"
-  num_environments: 1
-  total_num_steps: 30e6
-  log_interval: 25
-  num_checkpoints: 100
-  force_torch_single_threaded: True
-
-  eval:
-    video_option: []
+  video_dir: "video_dir"
   test_episode_count: -1
   eval_ckpt_path_dir: "data/vln_r2r_checkpoints"
+  num_environments: 1
+  checkpoint_folder: "data/vln_r2r_checkpoints"
+  total_num_steps: 100000
+  num_updates: -1
+  log_interval: 25
+  num_checkpoints: -1
+  force_torch_single_threaded: False
+  evaluate: False
+  checkpoint_interval: 1000
+  profiling: { capture_start_step: -1, num_steps_to_capture: -1 }
+
+  vector_env_factory:
+    _target_: "habitat_baselines.common.habitat_env_factory.HabitatVectorEnvFactory"
 
   rl:
-    # 清空policy块，避免所有PolicyConfig类型校验错误
-    policy: {}
-
     ppo:
       clip_param: 0.2
       ppo_epoch: 4
@@ -38,57 +79,30 @@ habitat_baselines:
       num_steps: 128
       hidden_size: 512
       use_gae: True
-      gamma: 0.99
-      tau: 0.95
       use_linear_clip_decay: True
       use_linear_lr_decay: True
       reward_window_size: 50
       use_double_buffered_sampler: False
-
-habitat:
-  dataset:
-    type: R2RVLN-v1
-    split: train
-    data_path: "data/datasets/vln/mp3d/r2r/v1/{split}/{split}.json.gz"
-    scenes_dir: "data/scene_datasets/"
-
-  environment:
-    max_episode_steps: 500
-  
-  simulator:
-    forward_step_size: 0.25
-    turn_angle: 15
-    agents:
-      main_agent:
-        # 彻底移除observation_spaces（当前版本不支持）
-        # Habitat会自动根据sim_sensors生成观测空间shape
-        sim_sensors:
-          rgb_sensor:
-            width: 256
-            height: 256
-            hfov: 90
-            type: HabitatSimRGBSensor
-          depth_sensor:
-            width: 256
-            height: 256
-            hfov: 90
-            type: HabitatSimDepthSensor
-          gps_sensor:
-            type: GPSSensor
-          compass_sensor:
-            type: CompassSensor
-    habitat_sim_v0:
-      gpu_device_id: 0
-
-  task:
-    type: VLN-v0
-    reward_measure: "distance_to_goal_reward"
-    success_measure: "spl"
-    end_on_success: True
-    # 移除task下的observation_spaces（当前版本不支持）
-    sensors:
-      instruction_sensor:
-        type: InstructionSensor
-        instruction_sensor_uuid: instruction
-        max_text_len: 200
-        embedding_size: 512
+      gamma: 0.99
+      tau: 0.95
+      use_normalized_advantage: False
+      entropy_target_factor: 0.0
+      use_adaptive_entropy_pen: False
+      use_clipped_value_loss: True
+    # # 关键修复：仅保留PolicyConfig支持的字段
+    # policy:
+    #   main_agent: 
+    #     name: "Seq2SeqResNetPolicy"  # 保留VLN专用策略名
+    #     action_distribution_type: "categorical"  # 仅保留该字段（PolicyConfig支持）
+    ddppo:
+      sync_frac: 0.6
+      distrib_backend: "GLOO"
+      rnn_type: "GRU"
+      num_recurrent_layers: 2
+      backbone: "resnet50"
+      pretrained_weights: "data/ddppo-models/gibson-2plus-resnet50.pth"
+      pretrained: True
+      pretrained_encoder: True
+      train_encoder: True
+      reset_critic: True
+      force_distributed: False
